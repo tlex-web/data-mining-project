@@ -1,0 +1,28 @@
+Nutzen:
+- Kostenoptimierung
+- Platzoptimierung 
+- Gewinnmaximierung
+Prozessintegration:
+- Lager / Vetrieb 
+- Intelligente Systeme einbinden 
+Strategischer Fit:
+- Lange Platzhaltung vemeiden
+- Schnellere Kommissionierung 
+- Kurze Lagerzeit
+- Angepasste Lager an Größe / Gewicht
+Ressourcen:
+- Management
+- Lager 
+- Vetrieb
+- Einkauf
+Kunden:
+- Intern
+Steuerung:
+- Monitorung 
+- ERP Systeme
+Kanäle:
+- 
+Datenquellen:
+- ERP
+- Datenbanken
+- Kreditoren

@@ -1,0 +1,44 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library("dplyr")
+```
+
+Data:
+
+```{r}
+name <- c('Hugo','Bernd','Rita','Thomas','Brigitte')
+salary <- c(2000, 2500, 3000, 1234, 3700)
+customer <- c('private', 'business', 'business', 'private', 'business')
+bonus <- c(100,500,125,50,1000)
+```
+
+Dataframe:
+
+```{r}
+df <- data.frame(name, salary, customer, bonus)
+```
+
+Extractions:
+
+```{r}
+# 1)
+df[2:3,]
+# 2)
+df[,2:3]
+# 3)
+df[4,2]
+# 4) 
+sum(df[,2])
+# 5)
+mean(df[,2])
+# 6)
+df[2:3,2] <- df[2:3,2] + 50
+```
+
+```{r}
+
+```

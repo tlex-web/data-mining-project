@@ -1,0 +1,15 @@
+Churn Prevention: 
+- Umsatzeinbrüche vermeiden
+- Kostenplanung
+- Budget ist limitierte Ressource 
+- Kundenaquise vermeiden
+- langfristige Kundenbindung 
+
+Anforderungen: 
+- Berechnung des Handlungsspielraumes 
+- Keine Interdependenzen in den Daten
+- Ausreichend historische Daten
+
+Ergebnisse
+- individuelle Kundenangebote erstellen
+- Zeitraum der Kündigung berechnen

@@ -1,0 +1,299 @@
+---
+title: "Data Understanding"
+author: "Tim Lui"
+date: "2023-03-06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(dplyr)
+library(plotly)
+library(ggplot2)
+library(naniar)
+```
+
+# Datensatz einlesen und aufbereiten
+
+Es werden zwei Dezimaltrenner verwendet (. und ,)
+
+1. X: Laufindex, redundant
+2. ID: Kundenid, unique, 5-stellig
+3. age: viele missing values
+4. job: 
+5. marital: wenige NA
+6. education: 
+7. default: 
+8. balance: viele Kunden mit 0 oder niedriger balance
+9. housing: wenige NA
+10. loan: 
+11. contact: 
+12. day:
+13. month: 
+14. campaign:
+15. pdays: 
+16. previous:
+17. poutcome:
+18. y: target variable
+
+Die Variable "duration" des Data Dictionary fehlt im Datensatz
+
+```{r}
+df <- read.csv("../data/marketing_1_dataset_prep.csv", sep = "#", dec = ",", stringsAsFactors = TRUE, na.strings = c("", " "))
+
+head(df)
+```
+
+```{r}
+str(df)
+```
+
+
+Zur Vereinheitlichung alle Variablennamen auf lowercase setzen
+```{r}
+# Spaltennamen klein schreiben
+colnames(df) <- tolower(colnames(df))
+
+colnames(df)
+```
+
+Lösche den Laufindex x, da R ab 1 indexiert ist und der Laufindex doppelt vorkommt
+```{r}
+df <- df %>%
+    select(-c(x))
+```
+
+
+## Data Type Casting
+
+```{r}
+# campaign
+df$campaign <- as.integer(df$campaign)
+```
+
+## Data Sanitisation
+
+```{r}
+# job 
+# rename admin. to admin
+df <- df |>
+    mutate(job = as.character(job),
+           job = ifelse(job == "admin.", "admin", job),
+           job = as.factor(job))
+
+# marital
+# set abbriviation d to divorced
+df <- df %>%
+    mutate(marital = as.character(marital),
+           marital = ifelse(marital == "d", "divorced", marital),
+           marital = as.factor(marital))
+summary(df$job)
+```
+
+Liste mit numeric / categoricals
+
+```{r}
+
+# numeric
+l_numeric <- df %>%
+    dplyr::select(where(is.numeric)) %>%
+    dplyr::select(c(-id)) %>%
+    colnames()
+
+# categorical
+l_categorical <- df %>%
+    dplyr::select(where(is.factor)) %>%
+    colnames()
+
+```
+
+
+```{r}
+str(df)
+```
+
+Kontrolle ob die Variable `id` unique ist
+
+```{r}
+print(length(unique(df$id))) 
+
+# dplyr
+# n_distinct(df$id)
+print(length(df$y))
+```
+
+# Deskriptive und graphische Datenanlyse
+
+## Variablen 
+
+### age
+
+```{r}
+summary(df$age)
+```
+
+Die Variable `age` enthält Ausreißer bis -25 im unteren Wertebereich und bis 196 im oberen Wertebereich. Da Median und arithmetischer Mittelwert nah beieinander liegen, gehen wir davon aus, dass es absolut betrachtet wenige Ausreißer gibt. 
+
+
+```{r}
+
+fig_box_age <- df %>%
+    plot_ly(y = ~age, type = "box", name = "Age")
+
+fig_box_age
+```
+
+
+
+```{r}
+quantile(df$age, probs = c(0.1, 0.2, 0.5, 0.8, 0.9, 0.99), na.rm = TRUE)
+```
+
+
+
+```{r}
+fig_box_age_y <- df %>%
+    dplyr::select(age, y) %>%
+    plotly::plot_ly(y = ~age, x = ~y, type = "box") %>%
+    layout(title = "Alter und Zielvariable", plot_bgcolor = "#fff")
+    
+fig_box_age_y
+```
+
+
+```{r}
+
+
+
+fig_hist_age_bal <- df %>%
+    dplyr::select(balance, age) %>%
+    dplyr::filter(balance < max(balance)) %>%
+    plotly::plot_ly(y = ~balance, x = ~age, type = "bar")
+
+fig_hist_age_bal
+```
+
+
+### job
+
+### marital
+
+### education
+
+### default
+
+### balance 
+
+```{r}
+summary(df$balance)
+```
+
+Es gibt Ausreißer in beide Richtungen. Das arithmetische Mittel ist deutlich größer als der Median, da die maximale Ausprägung der Variable bei über 500mio liegt. 50 % aller Werte liegen zwischen 71 und 1426. 
+
+```{r}
+quantile(df$balance, probs = c(0.1, 0.16, 0.17, 0.2, 0.8, 0.9, 0.99), na.rm = TRUE)
+```
+
+Ungefähr 16% aller Werte der Variable `balance` sind null. 99% aller Werte liegen unterhalb von 13329. 
+
+```{r}
+
+fig_box_balance <- df %>%
+    plot_ly(y = ~balance, type = "box")
+
+fig_box_balance
+```
+
+### housing
+
+### loan
+
+### contact
+
+### day
+
+### month
+
+### campaign
+
+### pdays
+
+### previous
+
+### poutcome
+
+### Zielvariable (y)
+
+```{r}
+df_count_y <- df %>%
+    dplyr::select(where(is.numeric)) %>%
+    dplyr::select(-c(id)) 
+
+
+plotly::plot_ly(data = df_count_y)
+```
+
+## Korrelationen
+
+```{r}
+
+df_corr <- df %>%
+    dplyr::select(where(is.numeric)) %>%
+    cor(method = "spearman") %>%
+    as.data.frame()
+
+plotly::plot_ly(data = df_corr, type = "heatmap")
+
+```
+
+
+
+## Missing Values
+
+Zeige den relativen Anteil von fehlenden Werten in den jeweiligen Variablen 
+```{r}
+naniar::vis_miss(df)
+```
+
+
+
+```{r}
+na_count <- df %>%
+    summarise(across(everything(), ~ sum(is.na(.))))
+
+
+na_count <- df %>%
+    mutate(percentage = length(df))
+
+plotly::plot_ly(data = na_count)
+```
+
+## Imputation
+
+```{r}
+
+# Median
+df_age_inputation_median <- df %>%
+    mutate(age = ifelse(is.na(age), median(age, na.rm = TRUE), age))
+
+# Mean
+df_age_inputation_mean <- df %>%
+    dplyr::select(age) %>%
+    mutate(age = ifelse(is.na(age), round(mean(age, na.rm = TRUE), digits = 0), age))
+
+# Mean age group by marital
+df_age_inputation_mean_group_marital <- df %>%
+    dplyr::select(age, marital) %>%
+    dplyr::group_by(marital) %>%
+    mutate(age = ifelse(is.na(age), round(mean(age, na.rm = TRUE),digits = 0), age))
+
+```
+
+```{r}
+ifelse(is.na(df$age), median(df$age, na.rm = TRUE), df$age)
+```
+
+
+
+

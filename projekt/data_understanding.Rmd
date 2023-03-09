@@ -1,5 +1,5 @@
 ---
-title: "Data Understanding"
+title: "CRISP-DM"
 author: "Tim Lui"
 date: "2023-03-06"
 output: html_document
@@ -12,6 +12,8 @@ library(dplyr)
 library(plotly)
 library(ggplot2)
 library(naniar)
+library(reshape2)
+library(caret)
 ```
 
 # Datensatz einlesen und aufbereiten
@@ -237,13 +239,109 @@ plotly::plot_ly(data = df_count_y)
 ## Korrelationen
 
 ```{r}
+corr_data <- df %>%
+    na.omit() %>%
+    dplyr::select(all_of(l_numeric)) %>%
+    cor(method = "spearman")
 
-df_corr <- df %>%
-    dplyr::select(where(is.numeric)) %>%
-    cor(method = "spearman") %>%
-    as.data.frame()
 
-plotly::plot_ly(data = df_corr, type = "heatmap")
+#do this before the transformation!
+corr_data[upper.tri(corr_data, diag = TRUE)] <- NA
+corr_data <- corr_data[-1, -ncol(corr_data)]
+
+#Store our variable names for later use
+x_corr_labels <- colnames(corr_data)
+y_corr_labels <- rownames(corr_data)
+
+#Change the variable names to numeric for the grid
+colnames(corr_data) <- 1:ncol(corr_data)
+rownames(corr_data) <- nrow(corr_data):1
+
+#Melt the data into the desired format
+corr_data_melted <- reshape2::melt(corr_data)
+
+#Adding the size variable & scaling it
+corr_data_melted$size <- (abs(corr_data_melted$value))
+scaling <- 500 / ncol(corr_data) / 2
+corr_data_melted$size <- corr_data_melted$size * scaling
+
+#Setting x and y ranges for the chart
+x_corr_range <- c(0.5, length(x_corr_labels)+0.5)
+y_corr_range <- c(0.5, length(y_corr_labels)+0.5)
+
+#Setting the gridlines
+x_corr_grid <- seq(1.5, length(x_corr_labels)-0.5, 1)
+y_corr_grid <- seq(1.5, length(y_corr_labels)-0.5, 1)
+
+#Axes definitions
+xAx1 <- list(showgrid = FALSE,
+            showline = FALSE,
+            zeroline =  FALSE,
+            tickvals = colnames(corr_data),
+            ticktext = x_corr_labels,
+            title = "",
+            range = x_corr_range,
+            rangemode = "tozero")
+
+xAx2 <- list(showgrid = TRUE,
+            showline = FALSE,
+            zeroline =  FALSE,
+            overlaying = "x",
+            showticklabels = FALSE,
+            range = x_corr_range,
+            tickvals = x_corr_grid)
+
+yAx1 <- list(autoaxis = FALSE,
+            showgrid = FALSE,
+            showline = FALSE,
+            zeroline =  FALSE,
+            tickvals = rownames(corr_data),
+            ticktext = y_corr_labels,
+            title = FALSE,
+            rangemode = "tozero",
+            range = y_corr_range)
+
+yAx2 <- list(showgrid = TRUE,
+            showline = FALSE,
+            zeroline =  FALSE,
+            overlaying = "y",
+            showticklabels = FALSE,
+            range = y_corr_range,
+            tickvals = y_corr_grid)
+
+
+fig_corr <- plot_ly(data = corr_data_melted, width = 500, height = 500)
+
+fig_corr <- fig_corr %>% 
+    add_trace(x = ~Var2, y = ~Var1, type = "scatter", mode = "markers",
+                        color = ~value,
+                        marker = list(size = ~size, opacity = 1),
+                        symbol = I("square"),
+                        text = ~value,
+                        hovertemplate = "%{text:.2f} <extra></extra>",
+                        xaxis = "x1",
+                        yaxis = "y1")
+
+fig_corr <- fig_corr %>% 
+    add_trace(x = ~Var2, y = ~Var1, type = "scatter", mode = "markers",
+                        opacity = 0,
+                        showlegend = FALSE,
+                        xaxis = "x2",
+                        yaxis = "y2",
+                        hoverinfo = "none")
+
+fig_corr <- fig_corr %>% 
+    layout(xaxis = xAx1,
+                     yaxis = yAx1, 
+                     xaxis2 = xAx2,
+                     yaxis2 = yAx2,
+                     plot_bgcolor = "rgba(0,0,0,0)",
+                     paper_bgcolor = "rgba(0, 0, 0, 0.03)")
+
+fig_corr <- fig_corr %>% 
+    colorbar(title = "", limits = c(-1,1), x = 1.1, y = 0.75)
+
+fig_corr
 
 ```
 
@@ -275,6 +373,7 @@ plotly::plot_ly(data = na_count)
 
 # Median
 df_age_inputation_median <- df %>%
+    dplyr::select(age) %>%
     mutate(age = ifelse(is.na(age), median(age, na.rm = TRUE), age))
 
 # Mean
@@ -290,10 +389,137 @@ df_age_inputation_mean_group_marital <- df %>%
 
 ```
 
+# Modelling
+
+## Test / Train Split
+
+Aufteilung der Daten in Test- und Trainingsdaten. 
+
 ```{r}
-ifelse(is.na(df$age), median(df$age, na.rm = TRUE), df$age)
+
+set.seed(1639)
+
+# Simple Random Sampling
+#df_s_random_sample <- df[sample(nrow(df), replace = TRUE, prob=c(0.7,0.3)), ]
+train_random_sample <- df %>% 
+    dplyr::sample_frac(0.70)
+
+test_random_sample <- dplyr::anti_join(df, train_random_sample, by = 'id')
+
+
+# Stratified Sampling
+stratified_sample_index <- caret::createDataPartition(df$y, p = 0.7, list = FALSE, times = 1,)
+
+train_stratified_sample <- df[stratified_sample_index,]
+test_stratified_sample  <- df[-stratified_sample_index,]
+
+```
+
+## CART
+
+```{r}
+
+library(rpart)
+
+# Hyperparamteter festlegen
+cart_config <- rpart::rpart.control(minsplit = 1, minbucket = 1, cp = 0.00012, maxcompete = 4, maxsurrogate = 10, usesurrogate = 2, surrogatestyle = 0, maxdepth = 5)
+
+
+df_cart_train <- train_stratified_sample %>%
+    #na.omit() %>%
+    dplyr::select(age, job, marital, education, balance, housing, loan, contact, poutcome, y)
+
+cart_model <- rpart(y ~ age + job + balance + loan + contact + housing + education + marital, data = df_cart_train, control= cart_config)
+
+# Parameter des Decision Tree Model
+summary(cart_model)
+
+```
+
+```{r}
+
+library(rpart.plot)
+
+rpart.plot(cart_model)
 ```
 
 
+Predict target variable
+```{r}
+
+cart_model_predictions <- data.frame(predict(cart_model,newdata= test_stratified_sample[,-1], type = "class"))
+
+
+df_cart_y_pred <- cart_model_predictions %>%
+    merge(test_stratified_sample, by.y = 0, by.x = 0) 
+
+
+names(df_cart_y_pred)[names(df_cart_y_pred) == "predict.cart_model..newdata...test_stratified_sample....1...type....class.."] <- "y_pred"
+
+
+cart_confusion_matrix <- table(df_cart_y_pred$y,df_cart_y_pred$y_pred)
+
+colnames(cart_confusion_matrix) = c("nein_pred", "ja_pred")
+
+cart_confusion_matrix
+```
+
+### Evaluation Decision Tree
+
+```{r}
+
+cm_cart <- caret::confusionMatrix(data = df_cart_y_pred$y_pred, reference = df_cart_y_pred$y)
+
+acc = cart_confusion_matrix[1,] / ( cart_confusion_matrix[,2] + cart_confusion_matrix[,1])
+
+
+cm_cart
+```
+
+
+## Random Forest
+
+
+```{r}
+library(randomForest)
+library(tidyr)
+
+# create data frame 
+df_random_forest_train <- train_stratified_sample %>%
+    tidyr::drop_na() %>%
+    dplyr::select(age, balance, housing, job, marital, loan, education, y)
+
+# create instance random forest model 
+random_forest_model <- randomForest::randomForest(y ~ age + balance + housing + job + marital + loan + education, ntree = 300, data = df_random_forest_train, importance = TRUE)
+
+# print feature importance 
+print(round(randomForest::importance(random_forest_model), 2))
+
+# print model params
+print(random_forest_model)
+
+```
+
+
+```{r}
+
+# create test set
+random_forest_test <- test_stratified_sample %>%
+    tidyr::drop_na() %>%
+    select(-c("y"))
+
+
+random_forest_predictions <- data.frame(predict(random_forest_model, random_forest_test))
+
+df_random_forest_y_pred <- random_forest_predictions %>%
+    merge(test_stratified_sample, by.y = 0, by.x = 0)
+
+names(df_random_forest_y_pred)[names(df_random_forest_y_pred) == "predict.random_forest_model..random_forest_test."] <- "y_pred"
+
+
+random_forest_confusion_matrix <- table(df_random_forest_y_pred$y,df_random_forest_y_pred$y_pred)
+
+random_forest_confusion_matrix
+```
 
 
